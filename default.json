@@ -12,7 +12,7 @@
   "labels": ["dependencies"],
   "platformAutomerge": true,
   "automergeStrategy": "squash",
-  "postUpdateOptions": ["gomodTidy"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
       "description": "Automerge minor, patch, pin and digest updates",
