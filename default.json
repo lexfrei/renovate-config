@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset for lexfrei repositories. Extend via { \"extends\": [\"github>lexfrei/renovate-config\"] }.",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":semanticCommitTypeAll(chore)",
+    ":prHourlyLimitNone",
+    ":prConcurrentLimitNone",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "labels": ["dependencies"],
+  "platformAutomerge": true,
+  "automergeStrategy": "squash",
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Automerge minor, patch, pin and digest updates",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Automerge all GitHub Actions updates including major",
+      "matchManagers": ["github-actions"],
+      "automerge": true
+    },
+    {
+      "description": "Let Renovate bump the go directive in go.mod (needs GOTOOLCHAIN=auto or a matching setup-go in CI)",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Keep controller-runtime in lockstep with the Kubernetes libraries (a split bump breaks compilation: controller-runtime vX needs a matching client-go)",
+      "groupName": "kubernetes",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["sigs.k8s.io/controller-runtime", "k8s.io/**"]
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Bump tool versions annotated with a '# renovate:' comment in workflows and the Makefile (golangci-lint, go, templ, ...)",
+      "customType": "regex",
+      "fileMatch": ["\\.github/workflows/.*\\.ya?ml$", "^Makefile$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\n.*?[\"']?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)[\"']?"
+      ]
+    }
+  ]
+}
