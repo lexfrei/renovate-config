@@ -3,6 +3,7 @@
   "description": "Shared Renovate preset for lexfrei repositories. Extend via { \"extends\": [\"github>lexfrei/renovate-config\"] }.",
   "extends": [
     "config:recommended",
+    "docker:enableMajor",
     ":semanticCommits",
     ":semanticCommitTypeAll(chore)",
     ":prHourlyLimitNone",
