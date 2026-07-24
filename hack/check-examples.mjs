@@ -10,10 +10,21 @@
 // Capture sanity: a regex that swallows the wrong span still "matches", and hands
 // Renovate a depName with a space in it or a version reading `loose`.
 //
-// Caveat worth knowing: Renovate compiles matchStrings with RE2, this runs them
-// through JS RegExp. Constructs RE2 rejects, lookaheads in particular, pass here
-// and fail in production.
+// matchStrings are compiled with RE2, the way Renovate compiles them, so a
+// construct RE2 rejects (a lookahead, say) fails here instead of passing CI and
+// failing in production. RE2 arrives as one of renovate's own dependencies; if it
+// is missing this falls back to JS RegExp and says so.
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+let RE2;
+try {
+  RE2 = createRequire(import.meta.url)('re2');
+} catch {
+  console.log('note re2 is not installed, falling back to JS RegExp; constructs RE2 rejects will not be caught');
+}
+
+const compile = (pattern, flags) => (RE2 ? new RE2(pattern, flags) : new RegExp(pattern, flags));
 
 const config = JSON.parse(readFileSync(new URL('../default.json', import.meta.url), 'utf8'));
 
@@ -30,14 +41,16 @@ function toRegExp(pattern) {
   if (pattern.startsWith('!')) {
     throw new Error(`managerFilePatterns entry ${pattern} is negated, which this check cannot evaluate`);
   }
-  const match = /^\/(.*)\/([a-z]*)$/.exec(pattern);
+  // Renovate accepts a trailing `i` and nothing else; /p/gm is treated as a glob
+  // there, so accepting it here would report a match Renovate never makes.
+  const match = /^\/(.*)\/(i?)$/.exec(pattern);
   if (!match) {
     throw new Error(`managerFilePatterns entry ${pattern} is a glob, which this check cannot evaluate`);
   }
-  return new RegExp(match[1], match[2]);
+  return compile(match[1], match[2]);
 }
 
-function problemsIn(lang, body) {
+function problemsIn(lang, body, expected = {}) {
   const file = sampleFile[lang];
   if (!file) {
     return [`${lang} example is annotated but this check has no sample filename for that language`];
@@ -46,7 +59,7 @@ function problemsIn(lang, body) {
   const hits = config.customManagers
     .filter((cm) => cm.managerFilePatterns.some((p) => toRegExp(p).test(file)))
     .flatMap((cm) => cm.matchStrings)
-    .flatMap((ms) => [...body.matchAll(new RegExp(ms, 'g'))]);
+    .flatMap((ms) => [...body.matchAll(compile(ms, 'g'))]);
 
   const annotations = (body.match(/# renovate:/g) ?? []).length;
   const problems = [];
@@ -63,6 +76,11 @@ function problemsIn(lang, body) {
     }
     if (/\s/.test(groups.depName)) {
       problems.push(`${lang}: captured depName "${groups.depName}" contains whitespace`);
+    }
+    for (const [group, want] of Object.entries(expected)) {
+      if (groups[group] !== want) {
+        problems.push(`${lang}: captured ${group} "${groups[group]}", expected "${want}"`);
+      }
     }
   }
 
@@ -88,17 +106,19 @@ RUN apk add --no-cache upx=5.0.1-r0 \\
 `],
 ];
 
+// The expected groups matter: without them a regex that drops the versioning
+// capture still passes, because depName and currentValue come out clean.
 const mustPass = [
   ['workflow annotation carrying versioning=', 'yaml', `
         with:
           # renovate: datasource=github-releases depName=golangci/golangci-lint versioning=semver
           version: v2.12.2
-`],
+`, { depName: 'golangci/golangci-lint', versioning: 'semver', currentValue: 'v2.12.2' }],
   ['apk pin with versioning=', 'dockerfile', `
 RUN apk add --no-cache \\
     # renovate: datasource=repology depName=alpine_3_22/upx versioning=loose
     upx=5.0.1-r0
-`],
+`, { depName: 'alpine_3_22/upx', versioning: 'loose', currentValue: '5.0.1-r0' }],
 ];
 
 let failed = false;
@@ -112,8 +132,8 @@ for (const [name, lang, body] of mustFail) {
   }
 }
 
-for (const [name, lang, body] of mustPass) {
-  const problems = problemsIn(lang, body);
+for (const [name, lang, body, expected] of mustPass) {
+  const problems = problemsIn(lang, body, expected);
   if (problems.length > 0) {
     console.error(`FAIL fixture "${name}" is valid but the check rejected it: ${problems.join('; ')}`);
     failed = true;

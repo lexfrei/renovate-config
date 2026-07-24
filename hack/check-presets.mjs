@@ -11,6 +11,10 @@
 //
 // Only default.json is resolved. renovate.json extends this repo over the network,
 // which is not something a PR gate should depend on.
+//
+// The import below is an internal path and renovate is installed unpinned, so an
+// upstream reshuffle shows up here as ERR_MODULE_NOT_FOUND rather than as a
+// config problem. Same tradeoff as the floating validator in the workflow.
 import { readFileSync } from 'node:fs';
 
 const { resolveConfigPresets } = await import('renovate/dist/config/presets/index.js');
@@ -38,6 +42,24 @@ const contracts = [
   ['security label is added, not substituted', resolved.vulnerabilityAlerts?.addLabels?.includes('security')],
   ['OSV alerts are on', resolved.osvVulnerabilityAlerts === true],
 ];
+
+// The indirect-gomod pair is the point of the whole preset, and both rules plus
+// their order have to survive: the disable has to come after the enable, and no
+// later rule may put `enabled` back for these deps.
+const rules = resolved.packageRules ?? [];
+const isIndirectGomod = (r) => r.matchDepTypes?.includes('indirect') && r.matchManagers?.includes('gomod');
+const enableAt = rules.findIndex((r) => isIndirectGomod(r) && r.enabled === true);
+const disableAt = rules.findIndex((r) => isIndirectGomod(r) && r.enabled === false && r.matchUpdateTypes?.length);
+
+contracts.push(
+  ['indirect gomod deps are enabled for lookup', enableAt !== -1],
+  ['non-security updates are disabled for them', disableAt !== -1],
+  ['the disable comes after the enable', enableAt !== -1 && disableAt > enableAt],
+  [
+    'no later rule re-enables them',
+    disableAt !== -1 && !rules.slice(disableAt + 1).some((r) => r.enabled !== undefined),
+  ],
+);
 
 for (const [contract, holds] of contracts) {
   if (holds) {
