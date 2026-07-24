@@ -43,42 +43,56 @@ const contracts = [
   ['OSV alerts are on', resolved.osvVulnerabilityAlerts === true],
 ];
 
-// The indirect-gomod pair is the point of the whole preset, and both rules plus
-// their order have to survive: the disable has to come after the enable, and no
-// later rule may put `enabled` back for these deps.
-const rules = resolved.packageRules ?? [];
-const isIndirectGomod = (r) => r.matchDepTypes?.includes('indirect') && r.matchManagers?.includes('gomod');
-const enableAt = rules.findIndex((r) => isIndirectGomod(r) && r.enabled === true);
-const disableAt = rules.findIndex((r) => isIndirectGomod(r) && r.enabled === false && r.matchUpdateTypes?.length);
+// The claim worth pinning is behavioural, not structural: an indirect Go module
+// named by an advisory has to survive both rule stages. Renovate marks every
+// `// indirect` entry disabled at extraction, and it is the alert's force block
+// that re-opens it, so this drives renovate's own applyPackageRules the way
+// fetch.js does rather than asserting on rule shapes.
+const { applyPackageRules } = await import('renovate/dist/util/package-rules/index.js');
+const { mergeChildConfig } = await import('renovate/dist/config/utils.js');
+const { getDefaultVersioning } = await import('renovate/dist/modules/datasource/common.js');
+const { getDefaultConfig } = await import('renovate/dist/modules/datasource/index.js');
 
-// Only rules that could actually select a gomod indirect dep count here. A rule
-// scoped to another manager or datasource cannot undo the disable however late
-// it sits, and failing on those would make reordering unrelated presets red.
-const couldReachIndirectGomod = (r) =>
-  r.enabled !== undefined &&
-  (r.matchManagers === undefined || r.matchManagers.includes('gomod')) &&
-  (r.matchDatasources === undefined || r.matchDatasources.includes('go'));
+// A pseudo-version dep carries a digest, and the gomod extractor pins it to
+// `loose` versioning, which cannot evaluate a range at all.
+const deps = {
+  release: { depName: 'example.com/rel', packageName: 'example.com/rel', manager: 'gomod', depType: 'indirect', datasource: 'go', currentValue: 'v1.0.0', enabled: false },
+  pseudo: { depName: 'example.com/pseudo', packageName: 'example.com/pseudo', manager: 'gomod', depType: 'indirect', datasource: 'go', currentValue: 'v0.0.0-20230101000000-abcdef123456', versioning: 'loose', currentDigest: 'abcdef123456', enabled: false },
+};
+
+// GitHub alerts state a range, OSV states the exact affected version.
+const alertRule = (base, dep, shape) => ({
+  matchDatasources: ['go'],
+  matchPackageNames: [dep.packageName],
+  matchCurrentVersion: shape === 'range' ? '< 1.2.3' : dep.currentValue,
+  isVulnerabilityAlert: true,
+  force: { ...base.vulnerabilityAlerts },
+});
+
+async function fixReaches(base, dep, shape) {
+  const config = { ...base, packageRules: [...(base.packageRules ?? []), alertRule(base, dep, shape)] };
+  let depConfig = mergeChildConfig(config, dep);
+  depConfig = mergeChildConfig(depConfig, await getDefaultConfig(depConfig.datasource));
+  depConfig.versioning ??= getDefaultVersioning(depConfig.datasource);
+  const looked = await applyPackageRules(depConfig, 'pre-lookup');
+  if (looked.enabled === false) {
+    return false;
+  }
+  const merged = await applyPackageRules({ ...looked, updateType: 'patch', newValue: 'v1.2.3' }, 'update-type-merge');
+  return merged.enabled !== false;
+}
+
+// Same config with vulnerability alerts left at renovate's default, which has no
+// `enabled` key at all. If this still produced fixes, the ones above would prove
+// nothing about what this preset contributes.
+const withoutAlerts = { ...resolved, vulnerabilityAlerts: { groupName: null } };
 
 contracts.push(
-  ['indirect gomod deps are enabled for lookup', enableAt !== -1],
-  ['non-security updates are disabled for them', disableAt !== -1],
-  ['the disable comes after the enable', enableAt !== -1 && disableAt > enableAt],
-  [
-    'no later rule re-enables them',
-    disableAt !== -1 && !rules.slice(disableAt + 1).some(couldReachIndirectGomod),
-  ],
-);
-
-// The one case the preset buys, and the reason the extra lookups are worth it.
-// GitHub alerts state a range, OSV states an exact version, and a Go
-// pseudo-version satisfies the second but not the first.
-const semver = (await import('renovate/dist/modules/versioning/index.js')).get('semver');
-const pseudo = 'v0.0.0-20230101000000-abcdef123456';
-
-contracts.push(
-  ['a range advisory does not match a pseudo-version', semver.matches(pseudo, '< 1.2.3') === false],
-  ['a range advisory matches a release version', semver.matches('v1.0.0', '< 1.2.3') === true],
-  ['an exact advisory matches a pseudo-version', semver.matches(pseudo, pseudo) === true],
+  ['a range advisory reaches a release-version indirect dep', await fixReaches(resolved, deps.release, 'range')],
+  ['an exact advisory reaches a release-version indirect dep', await fixReaches(resolved, deps.release, 'exact')],
+  ['an exact advisory reaches a pseudo-version indirect dep', await fixReaches(resolved, deps.pseudo, 'exact')],
+  ['a range advisory cannot reach a pseudo-version, as documented', (await fixReaches(resolved, deps.pseudo, 'range')) === false],
+  ['none of this works without vulnerability alerts enabled', (await fixReaches(withoutAlerts, deps.release, 'range')) === false],
 );
 
 for (const [contract, holds] of contracts) {
