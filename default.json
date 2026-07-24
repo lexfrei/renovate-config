@@ -9,7 +9,8 @@
     ":prHourlyLimitNone",
     ":prConcurrentLimitNone",
     "helpers:pinGitHubActionDigests",
-    "security:gomodIndirectSecurityUpdates"
+    "security:gomodIndirectSecurityUpdates",
+    ":enableVulnerabilityAlertsWithAdditionalLabel(security)"
   ],
   "labels": ["dependencies"],
   "osvVulnerabilityAlerts": true,
