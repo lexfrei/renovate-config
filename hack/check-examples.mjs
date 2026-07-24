@@ -2,12 +2,17 @@
 // that would really process a file of that kind. A documented example that does not
 // match is worse than no example: Renovate finds nothing and says nothing.
 //
-// Two things this got wrong before and now guards against. Scoping: the
-// workflows regex is loose enough to match a Dockerfile snippet it would never
+// Three traps this guards against, each of which shipped at some point. Scoping:
+// the workflows regex is loose enough to match a Dockerfile snippet it would never
 // run against, so an example is only checked against managers whose
 // managerFilePatterns accept the sample filename. Counting: an `apk add` block
-// usually pins several packages, so every annotation in a block has to match, not
-// just one of them.
+// usually pins several packages, so every annotation has to match, not just one.
+// Capture sanity: a regex that swallows the wrong span still "matches", and hands
+// Renovate a depName with a space in it or a version reading `loose`.
+//
+// Caveat worth knowing: Renovate compiles matchStrings with RE2, this runs them
+// through JS RegExp. Constructs RE2 rejects, lookaheads in particular, pass here
+// and fail in production.
 import { readFileSync } from 'node:fs';
 
 const config = JSON.parse(readFileSync(new URL('../default.json', import.meta.url), 'utf8'));
@@ -19,7 +24,13 @@ const sampleFile = {
 };
 
 // managerFilePatterns holds slash-delimited regexes: /^Makefile$/
-const toRegExp = (pattern) => new RegExp(pattern.replace(/^\/|\/$/g, ''));
+function toRegExp(pattern) {
+  const match = /^\/(.*)\/$/.exec(pattern);
+  if (!match) {
+    throw new Error(`managerFilePatterns entry ${pattern} is a glob, which this check cannot evaluate`);
+  }
+  return new RegExp(match[1]);
+}
 
 function problemsIn(lang, body) {
   const file = sampleFile[lang];
@@ -36,48 +47,73 @@ function problemsIn(lang, body) {
   const problems = [];
 
   if (hits.length !== annotations) {
-    problems.push(`${lang} example: ${hits.length} of ${annotations} annotations matched a manager that runs on ${file}`);
+    problems.push(`${lang}: ${hits.length} of ${annotations} annotations matched a manager that runs on ${file}`);
   }
 
   for (const { groups } of hits) {
-    // "loose" and friends show up when the annotation drifts away from the pinned
-    // token and the regex captures a fragment of the annotation itself.
+    // A version reading "loose" or a depName with a space in it means the regex
+    // captured part of the annotation instead of the value next to it.
     if (!/^v?\d/.test(groups.currentValue)) {
-      problems.push(`${lang} example: ${groups.depName} captured currentValue "${groups.currentValue}", which is not a version`);
+      problems.push(`${lang}: ${groups.depName} captured currentValue "${groups.currentValue}", which is not a version`);
+    }
+    if (/\s/.test(groups.depName)) {
+      problems.push(`${lang}: captured depName "${groups.depName}" contains whitespace`);
     }
   }
 
   return problems;
 }
 
-// Known-bad snippets, kept here so the rejection path runs on every CI run. A
-// checker that has never rejected anything is indistinguishable from one that
-// cannot.
-const mustFail = {
-  'annotation above the RUN line': `
+// Fixtures, kept here so both paths run on every invocation. A checker that has
+// never rejected anything is indistinguishable from one that cannot.
+const mustFail = [
+  ['annotation above the RUN line', 'dockerfile', `
 # renovate: datasource=repology depName=alpine_3_22/upx
 RUN apk add --no-cache upx=5.0.1-r0
-`,
-  'misplaced annotation carrying versioning=': `
+`],
+  ['misplaced annotation carrying versioning=', 'dockerfile', `
 # renovate: datasource=repology depName=alpine_3_22/upx versioning=loose
 RUN apk add --no-cache upx=5.0.1-r0
-`,
-  'one good pin and one misplaced': `
+`],
+  ['one good pin and one misplaced', 'dockerfile', `
 # renovate: datasource=repology depName=alpine_3_22/upx
 RUN apk add --no-cache upx=5.0.1-r0 \\
     # renovate: datasource=repology depName=alpine_3_22/curl
     curl=8.14.1-r1
-`,
-};
+`],
+];
+
+const mustPass = [
+  ['workflow annotation carrying versioning=', 'yaml', `
+        with:
+          # renovate: datasource=github-releases depName=golangci/golangci-lint versioning=semver
+          version: v2.12.2
+`],
+  ['apk pin with versioning=', 'dockerfile', `
+RUN apk add --no-cache \\
+    # renovate: datasource=repology depName=alpine_3_22/upx versioning=loose
+    upx=5.0.1-r0
+`],
+];
 
 let failed = false;
 
-for (const [name, body] of Object.entries(mustFail)) {
-  if (problemsIn('dockerfile', body).length === 0) {
-    console.error(`FAIL self-test: "${name}" is broken but the check accepted it`);
+for (const [name, lang, body] of mustFail) {
+  if (problemsIn(lang, body).length === 0) {
+    console.error(`FAIL fixture "${name}" is broken but the check accepted it`);
     failed = true;
   } else {
-    console.log(`ok   self-test rejects: ${name}`);
+    console.log(`ok   rejects: ${name}`);
+  }
+}
+
+for (const [name, lang, body] of mustPass) {
+  const problems = problemsIn(lang, body);
+  if (problems.length > 0) {
+    console.error(`FAIL fixture "${name}" is valid but the check rejected it: ${problems.join('; ')}`);
+    failed = true;
+  } else {
+    console.log(`ok   accepts: ${name}`);
   }
 }
 
@@ -94,10 +130,10 @@ if (blocks.length === 0) {
 for (const block of blocks) {
   const problems = problemsIn(block.lang, block.body);
   for (const problem of problems) {
-    console.error(`FAIL ${problem}`);
+    console.error(`FAIL README ${problem}`);
   }
   if (problems.length === 0) {
-    console.log(`ok   ${block.lang} example matches ${sampleFile[block.lang]}`);
+    console.log(`ok   README ${block.lang} example matches ${sampleFile[block.lang]}`);
   }
   failed ||= problems.length > 0;
 }

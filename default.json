@@ -51,7 +51,7 @@
         "/^Makefile$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\n.*?[\"']?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)[\"']?"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?.*\\n.*?[\"']?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)[\"']?"
       ]
     },
     {
