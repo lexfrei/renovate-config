@@ -51,14 +51,34 @@ const isIndirectGomod = (r) => r.matchDepTypes?.includes('indirect') && r.matchM
 const enableAt = rules.findIndex((r) => isIndirectGomod(r) && r.enabled === true);
 const disableAt = rules.findIndex((r) => isIndirectGomod(r) && r.enabled === false && r.matchUpdateTypes?.length);
 
+// Only rules that could actually select a gomod indirect dep count here. A rule
+// scoped to another manager or datasource cannot undo the disable however late
+// it sits, and failing on those would make reordering unrelated presets red.
+const couldReachIndirectGomod = (r) =>
+  r.enabled !== undefined &&
+  (r.matchManagers === undefined || r.matchManagers.includes('gomod')) &&
+  (r.matchDatasources === undefined || r.matchDatasources.includes('go'));
+
 contracts.push(
   ['indirect gomod deps are enabled for lookup', enableAt !== -1],
   ['non-security updates are disabled for them', disableAt !== -1],
   ['the disable comes after the enable', enableAt !== -1 && disableAt > enableAt],
   [
     'no later rule re-enables them',
-    disableAt !== -1 && !rules.slice(disableAt + 1).some((r) => r.enabled !== undefined),
+    disableAt !== -1 && !rules.slice(disableAt + 1).some(couldReachIndirectGomod),
   ],
+);
+
+// The one case the preset buys, and the reason the extra lookups are worth it.
+// GitHub alerts state a range, OSV states an exact version, and a Go
+// pseudo-version satisfies the second but not the first.
+const semver = (await import('renovate/dist/modules/versioning/index.js')).get('semver');
+const pseudo = 'v0.0.0-20230101000000-abcdef123456';
+
+contracts.push(
+  ['a range advisory does not match a pseudo-version', semver.matches(pseudo, '< 1.2.3') === false],
+  ['a range advisory matches a release version', semver.matches('v1.0.0', '< 1.2.3') === true],
+  ['an exact advisory matches a pseudo-version', semver.matches(pseudo, pseudo) === true],
 );
 
 for (const [contract, holds] of contracts) {

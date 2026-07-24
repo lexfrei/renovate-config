@@ -53,6 +53,8 @@ Pin the linter once per repo so a new release can't silently turn the required L
 
 The `customManager` above then bumps `v2.12.2` via controlled PRs.
 
+Both annotation managers read the line directly below the comment, so the annotation has to sit immediately above the version, with nothing but whitespace between them. Above the `uses:` line, or with another key in between, it matches nothing and reports nothing.
+
 ## Pinned apk packages
 
 An unpinned `apk add` gives a different image on every build. Pin the version and annotate it, and Renovate keeps the pin current from [Repology](https://repology.org/):

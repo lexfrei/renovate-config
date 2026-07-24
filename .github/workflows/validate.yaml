@@ -19,11 +19,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # renovate declares engines.node ^24.11.0 and npm only warns on a mismatch,
-      # so without this the job runs on whatever the runner image ships and a
-      # too-old Node surfaces as a crash inside the validator.
+      # so without this the job runs on whatever the runner image ships. lts/* is
+      # no good either: it walks past the caret as soon as the next major goes
+      # LTS. Pinned and annotated, which also exercises the preset's own manager.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: lts/*
+          # renovate: datasource=node-version depName=node
+          node-version: 24.11.0
 
       # Unpinned on purpose, against the usual pin-your-tools rule: the bot that
       # consumes this preset always runs the newest release, so a pinned checker
@@ -44,3 +46,7 @@ jobs:
 
       - name: Check README examples
         run: node hack/check-examples.mjs
+        env:
+          # Refuse the JS RegExp fallback here: it would still pass while no
+          # longer testing the RE2 behaviour the check is named for.
+          REQUIRE_RE2: '1'

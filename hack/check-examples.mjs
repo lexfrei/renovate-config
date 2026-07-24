@@ -21,7 +21,15 @@ let RE2;
 try {
   RE2 = createRequire(import.meta.url)('re2');
 } catch {
-  console.log('note re2 is not installed, falling back to JS RegExp; constructs RE2 rejects will not be caught');
+  // Falling back silently would leave the check green while it quietly stopped
+  // testing what it claims to. CI sets REQUIRE_RE2 so the degraded mode cannot
+  // pass there; locally it stays a warning.
+  const message = 're2 is not installed, so RE2-only failures will not be caught';
+  if (process.env.REQUIRE_RE2) {
+    console.error(`FAIL ${message}`);
+    process.exit(1);
+  }
+  console.log(`note ${message}`);
 }
 
 const compile = (pattern, flags) => (RE2 ? new RE2(pattern, flags) : new RegExp(pattern, flags));
@@ -68,7 +76,12 @@ function problemsIn(lang, body, expected = {}) {
     problems.push(`${lang}: ${hits.length} of ${annotations} annotations matched a manager that runs on ${file}`);
   }
 
-  for (const { groups } of hits) {
+  for (const hit of hits) {
+    const { groups } = hit;
+    if (!groups) {
+      problems.push(`${lang}: a matchString matched without named capture groups`);
+      continue;
+    }
     // A version reading "loose" or a depName with a space in it means the regex
     // captured part of the annotation instead of the value next to it.
     if (!/^v?\d/.test(groups.currentValue)) {
@@ -103,6 +116,19 @@ RUN apk add --no-cache upx=5.0.1-r0
 RUN apk add --no-cache upx=5.0.1-r0 \\
     # renovate: datasource=repology depName=alpine_3_22/curl
     curl=8.14.1-r1
+`],
+  // The adjacency rule is not an apk quirk, it applies to the workflow manager too.
+  ['workflow annotation separated from the version', 'yaml', `
+        with:
+          # renovate: datasource=github-releases depName=golangci/golangci-lint
+          args: --timeout 5m
+          version: v2.12.2
+`],
+  ['workflow annotation above the uses line', 'yaml', `
+        # renovate: datasource=github-releases depName=golangci/golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
 `],
 ];
 
