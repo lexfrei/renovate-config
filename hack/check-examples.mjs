@@ -23,13 +23,18 @@ const sampleFile = {
   yaml: '.github/workflows/pr.yaml',
 };
 
-// managerFilePatterns holds slash-delimited regexes: /^Makefile$/
+// managerFilePatterns holds slash-delimited regexes, optionally with flags:
+// /^Makefile$/ or /dockerfile$/i. Renovate also accepts globs and negation, and
+// this check cannot evaluate either, so it says so instead of guessing.
 function toRegExp(pattern) {
-  const match = /^\/(.*)\/$/.exec(pattern);
+  if (pattern.startsWith('!')) {
+    throw new Error(`managerFilePatterns entry ${pattern} is negated, which this check cannot evaluate`);
+  }
+  const match = /^\/(.*)\/([a-z]*)$/.exec(pattern);
   if (!match) {
     throw new Error(`managerFilePatterns entry ${pattern} is a glob, which this check cannot evaluate`);
   }
-  return new RegExp(match[1]);
+  return new RegExp(match[1], match[2]);
 }
 
 function problemsIn(lang, body) {
