@@ -8,22 +8,32 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Unpinned on purpose, against the usual pin-your-tools rule: the bot that
+      # consumes this preset always runs the newest release, so a pinned checker
+      # would go green on a config the real thing has already started rejecting.
+      # The cost is that an upstream deprecation can turn this red on an unrelated
+      # PR, which is the warning we want anyway.
+      - name: Install renovate
+        run: npm install renovate@latest --no-save
 
       # --no-global: without it a file named on the command line is validated as
       # self-hosted global config, which lets repo-only violations through.
       # --strict: turn a pending config migration into a failure instead of a log line.
-      # @latest on purpose, against the usual pin-your-tools rule: the bot that
-      # consumes this preset always runs the newest release, so a pinned validator
-      # would go green on a config the real thing has already started rejecting.
-      # The cost is that an upstream deprecation can turn this red on an unrelated
-      # PR, which is the warning we want anyway.
-      - name: Validate preset
-        run: npx --yes --package renovate@latest renovate-config-validator --no-global --strict default.json
+      - name: Validate configs
+        run: ./node_modules/.bin/renovate-config-validator --no-global --strict default.json renovate.json
+
+      - name: Check preset resolution
+        run: node hack/check-presets.mjs
 
       - name: Check README examples
         run: node hack/check-examples.mjs
