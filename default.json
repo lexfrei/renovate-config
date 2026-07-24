@@ -45,7 +45,10 @@
     {
       "description": "Bump tool versions annotated with a '# renovate:' comment in workflows and the Makefile (golangci-lint, go, templ, ...)",
       "customType": "regex",
-      "fileMatch": ["\\.github/workflows/.*\\.ya?ml$", "^Makefile$"],
+      "managerFilePatterns": [
+        "/\\.github/workflows/.*\\.ya?ml$/",
+        "/^Makefile$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\n.*?[\"']?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)[\"']?"
       ]
@@ -53,7 +56,7 @@
     {
       "description": "Bump pinned apk packages annotated with a '# renovate: datasource=repology depName=alpine_<ver>/<pkg>' comment in Containerfiles and Dockerfiles",
       "customType": "regex",
-      "fileMatch": ["(^|/)Containerfile$", "(^|/)Dockerfile$"],
+      "managerFilePatterns": ["/(^|/)Containerfile$/", "/(^|/)Dockerfile$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+[\\w.-]+?=(?<currentValue>[\\w.-]+)"
       ],
