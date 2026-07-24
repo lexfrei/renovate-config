@@ -1,0 +1,24 @@
+name: Validate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # --no-global: without it a file named on the command line is validated as
+      # self-hosted global config, which lets repo-only violations through.
+      # --strict: turn a pending config migration into a failure instead of a log line.
+      - name: Validate preset
+        run: npx --yes --package renovate@latest renovate-config-validator --no-global --strict default.json
+
+      - name: Check README examples
+        run: node hack/check-examples.mjs
