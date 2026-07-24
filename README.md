@@ -34,6 +34,8 @@ Add per-repo overrides after the `extends` as needed.
 
 Advisories come from two independent sources: GitHub's Dependabot alerts, which need the Dependency graph and Dependabot alerts switched on in the repository's security settings, and the OSV database (`osvVulnerabilityAlerts`), which carries the Go vulnerability database in addition to GitHub's advisories. Fixes carry a `security` label on top of the usual `dependencies` one — create that label in the repository if it isn't there — and a minor or patch fix automerges like any other.
 
+The cost is lookups. Enabling indirect deps is what makes them visible at all, and the rule that suppresses their non-security updates can only apply once an update type is known, so every `// indirect` entry gets a datasource lookup on every run and the result is discarded unless an advisory names it. On a repo built on controller-runtime that is a few hundred extra lookups per run, and no extra PRs.
+
 Renovate's own documentation says OSV alerts cover direct dependencies only, which reads like a contradiction here. It is not: `go.mod` lists indirect requirements explicitly, unlike a `package.json`, so they arrive as ordinary extracted dependencies and the OSV scan sees them.
 
 ## golangci-lint pinning
