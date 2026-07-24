@@ -10,29 +10,20 @@
 // Capture sanity: a regex that swallows the wrong span still "matches", and hands
 // Renovate a depName with a space in it or a version reading `loose`.
 //
-// matchStrings are compiled with RE2, the way Renovate compiles them, so a
-// construct RE2 rejects (a lookahead, say) fails here instead of passing CI and
-// failing in production. RE2 arrives as one of renovate's own dependencies; if it
-// is missing this falls back to JS RegExp and says so.
+// Renovate compiles matchStrings with RE2, this compiles them with JS RegExp,
+// and RE2 rejects constructs JS accepts. Requiring the real RE2 here turned out
+// to be a bad trade: it is an optional native dependency of renovate, whether its
+// install script runs depends on the npm version the runner ships, and a check
+// that disappears with the runner image is worse than one that does less on
+// purpose. So the difference is scanned for directly instead, and the list below
+// is the part of RE2 that matters for annotation patterns.
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 
-let RE2;
-try {
-  RE2 = createRequire(import.meta.url)('re2');
-} catch {
-  // Falling back silently would leave the check green while it quietly stopped
-  // testing what it claims to. CI sets REQUIRE_RE2 so the degraded mode cannot
-  // pass there; locally it stays a warning.
-  const message = 're2 is not installed, so RE2-only failures will not be caught';
-  if (process.env.REQUIRE_RE2) {
-    console.error(`FAIL ${message}`);
-    process.exit(1);
-  }
-  console.log(`note ${message}`);
-}
+// Lookahead, lookbehind and backreferences: RE2 has none of them, and a pattern
+// using one compiles here and throws in Renovate.
+const RE2_REJECTS = /\(\?=|\(\?!|\(\?<=|\(\?<!|\\[1-9]/;
 
-const compile = (pattern, flags) => (RE2 ? new RE2(pattern, flags) : new RegExp(pattern, flags));
+const compile = (pattern, flags) => new RegExp(pattern, flags);
 
 const config = JSON.parse(readFileSync(new URL('../default.json', import.meta.url), 'utf8'));
 
@@ -148,6 +139,23 @@ RUN apk add --no-cache \\
 ];
 
 let failed = false;
+
+for (const cm of config.customManagers) {
+  for (const ms of cm.matchStrings) {
+    if (RE2_REJECTS.test(ms)) {
+      console.error(`FAIL matchString uses a construct RE2 rejects, so Renovate will not compile it: ${ms}`);
+      failed = true;
+    }
+  }
+}
+if (!failed) {
+  console.log('ok   every matchString stays inside what RE2 accepts');
+}
+// The scanner has to be able to say no, or the line above is decoration.
+if (!RE2_REJECTS.test('version(?=\\s)')) {
+  console.error('FAIL the RE2 scanner no longer recognises a lookahead');
+  failed = true;
+}
 
 for (const [name, lang, body] of mustFail) {
   if (problemsIn(lang, body).length === 0) {

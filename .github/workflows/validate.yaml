@@ -46,7 +46,3 @@ jobs:
 
       - name: Check README examples
         run: node hack/check-examples.mjs
-        env:
-          # Refuse the JS RegExp fallback here: it would still pass while no
-          # longer testing the RE2 behaviour the check is named for.
-          REQUIRE_RE2: '1'
