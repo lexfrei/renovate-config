@@ -12,6 +12,7 @@
     ":enableVulnerabilityAlertsWithAdditionalLabel(security)"
   ],
   "labels": ["dependencies"],
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
   "osvVulnerabilityAlerts": true,
   "platformAutomerge": true,
   "automergeStrategy": "squash",
