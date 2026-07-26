@@ -17,6 +17,13 @@
   "platformAutomerge": true,
   "automergeStrategy": "squash",
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "pip_requirements": {
+    "description": "Also track the .in sources pip-compile locks are generated from. The default patterns match the compiled .txt only, so a bump moved the lock and left the source behind — and a repo that checks the two agree then fails CI on every update.",
+    "managerFilePatterns": [
+      "/(^|/)([\\w-]*)requirements([-.]\\w+)?\\.(txt|pip|in)$/",
+      "/(^|/)requirements/.*\\.(txt|pip|in)$/"
+    ]
+  },
   "packageRules": [
     {
       "description": "Automerge minor, patch, pin and digest updates",
