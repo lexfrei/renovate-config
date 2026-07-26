@@ -25,6 +25,7 @@ Add per-repo overrides after the `extends` as needed.
 - `go` directive in `go.mod` bumped (`rangeStrategy: bump`) — CI must use `GOTOOLCHAIN=auto` or a matching `setup-go` so the runner can build the new directive.
 - **`controller-runtime` grouped with `k8s.io/*`** under one `kubernetes` group, so they always bump together (a split bump breaks compilation).
 - A regex `customManager` that bumps any tool version annotated with a `# renovate: datasource=… depName=…` comment in workflows or the repository's root `Makefile` (golangci-lint, go, templ, …). Seed the workflow with a concrete `version: vX.Y.Z` once; Renovate keeps it current after that.
+- `minimumReleaseAgeBehaviour: timestamp-optional`, which only bites in a repo that sets `minimumReleaseAge` itself. Renovate 42 made `timestamp-required` the default, so a release with no timestamp is never treated as stable — and the `docker` datasource reports timestamps for Docker Hub only. A quarantine on major updates then freezes every ghcr image and every `github-tags` dependency permanently: no error, nothing above debug level in the log, one line under Pending Status Checks on the dashboard that reads like it is waiting for CI. `timestamp-optional` keeps the wait effective where release dates exist and drops it where they cannot be had.
 - A second regex `customManager` for apk packages pinned in a `Containerfile` or `Dockerfile` — see below.
 - **Vulnerability fixes, including indirect Go modules** — see below.
 
