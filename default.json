@@ -14,7 +14,7 @@
   "labels": ["dependencies"],
   "minimumReleaseAgeBehaviour": "timestamp-optional",
   "osvVulnerabilityAlerts": true,
-  "platformAutomerge": true,
+  "platformAutomerge": false,
   "automergeStrategy": "squash",
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "pip_requirements": {
