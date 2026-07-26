@@ -24,17 +24,8 @@
       "/(^|/)requirements/.*\\.(txt|pip|in)$/"
     ]
   },
+  "automerge": true,
   "packageRules": [
-    {
-      "description": "Automerge minor, patch, pin and digest updates",
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "automerge": true
-    },
-    {
-      "description": "Automerge all GitHub Actions updates including major",
-      "matchManagers": ["github-actions"],
-      "automerge": true
-    },
     {
       "description": "Let Renovate bump the go directive in go.mod (needs GOTOOLCHAIN=auto or a matching setup-go in CI)",
       "matchManagers": ["gomod"],
