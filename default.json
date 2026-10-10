@@ -11,14 +11,19 @@
     "helpers:pinGitHubActionDigests",
     ":enableVulnerabilityAlertsWithAdditionalLabel(security)"
   ],
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "minimumReleaseAgeBehaviour": "timestamp-optional",
   "osvVulnerabilityAlerts": true,
   "platformAutomerge": false,
   "automergeStrategy": "squash",
-  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
+  ],
   "pip_requirements": {
-    "description": "Also track the .in sources pip-compile locks are generated from. The default patterns match the compiled .txt only, so a bump moved the lock and left the source behind — and a repo that checks the two agree then fails CI on every update.",
+    "description": "Also track the .in sources pip-compile locks are generated from. The default patterns match the compiled .txt only, so a bump moved the lock and left the source behind \u2014 and a repo that checks the two agree then fails CI on every update.",
     "managerFilePatterns": [
       "/(^|/)([\\w-]*)requirements([-.]\\w+)?\\.(txt|pip|in)$/",
       "/(^|/)requirements/.*\\.(txt|pip|in)$/"
@@ -28,16 +33,41 @@
   "packageRules": [
     {
       "description": "Let Renovate bump the go directive in go.mod (needs GOTOOLCHAIN=auto or a matching setup-go in CI)",
-      "matchManagers": ["gomod"],
-      "matchDepNames": ["go"],
-      "matchDepTypes": ["golang"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "matchDepTypes": [
+        "golang"
+      ],
       "rangeStrategy": "bump"
     },
     {
       "description": "Keep controller-runtime in lockstep with the Kubernetes libraries (a split bump breaks compilation: controller-runtime vX needs a matching client-go)",
       "groupName": "kubernetes",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["sigs.k8s.io/controller-runtime", "k8s.io/**"]
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "sigs.k8s.io/controller-runtime",
+        "k8s.io/**"
+      ]
+    },
+    {
+      "description": "Bump the go directive and the golang base image together. Apart, the directive lands first and the builder image still ships an older patch release; since the directive is a hard minimum, `go mod download` then fails inside the image and every Go PR in the repo goes red at once. Matched by datasource rather than by manager so a regex manager tracking the same version (a docs page, a tool pin) joins the group too.",
+      "groupName": "go toolchain",
+      "groupSlug": "go-toolchain",
+      "matchDatasources": [
+        "golang-version",
+        "docker"
+      ],
+      "matchPackageNames": [
+        "go",
+        "golang",
+        "**/golang"
+      ]
     }
   ],
   "customManagers": [
@@ -55,7 +85,10 @@
     {
       "description": "Bump pinned apk packages annotated with a '# renovate: datasource=repology depName=alpine_<ver>/<pkg>' comment in Containerfiles and Dockerfiles",
       "customType": "regex",
-      "managerFilePatterns": ["/(^|/)Containerfile$/", "/(^|/)Dockerfile$/"],
+      "managerFilePatterns": [
+        "/(^|/)Containerfile$/",
+        "/(^|/)Dockerfile$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+[\\w.-]+?=(?<currentValue>[\\w.-]+)"
       ],
