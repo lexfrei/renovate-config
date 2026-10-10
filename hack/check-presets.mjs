@@ -95,6 +95,33 @@ contracts.push(
   ['none of this works without vulnerability alerts enabled', (await fixReaches(withoutAlerts, deps.release, 'range')) === false],
 );
 
+// Groups are decided by rule order: the last matching rule wins, so the broad
+// go-modules rule has to sit above kubernetes and go toolchain for them to
+// re-claim their packages. That ordering is invisible to the validator and
+// silently regroups every repository when it slips, so each kind of dependency
+// is driven through renovate's own rule engine and its group read back.
+async function groupOf(base, dep) {
+  let depConfig = mergeChildConfig(base, dep);
+  depConfig = mergeChildConfig(depConfig, await getDefaultConfig(depConfig.datasource));
+  depConfig.versioning ??= getDefaultVersioning(depConfig.datasource);
+  const looked = await applyPackageRules(depConfig, 'pre-lookup');
+  const merged = await applyPackageRules({ ...looked, updateType: 'minor' }, 'update-type-merge');
+  return merged.groupName;
+}
+
+const grouped = [
+  ['a plain Go module joins go modules', { depName: 'example.com/lib', packageName: 'example.com/lib', manager: 'gomod', depType: 'require', datasource: 'go', currentValue: 'v1.0.0' }, 'go modules'],
+  ['client-go stays in kubernetes, not go modules', { depName: 'k8s.io/client-go', packageName: 'k8s.io/client-go', manager: 'gomod', depType: 'require', datasource: 'go', currentValue: 'v0.36.0' }, 'kubernetes'],
+  ['controller-runtime stays in kubernetes', { depName: 'sigs.k8s.io/controller-runtime', packageName: 'sigs.k8s.io/controller-runtime', manager: 'gomod', depType: 'require', datasource: 'go', currentValue: 'v0.24.0' }, 'kubernetes'],
+  ['the go directive stays in go toolchain, not go modules', { depName: 'go', packageName: 'go', manager: 'gomod', depType: 'golang', datasource: 'golang-version', currentValue: '1.26.0' }, 'go toolchain'],
+  ['the golang base image joins go toolchain', { depName: 'docker.io/library/golang', packageName: 'docker.io/library/golang', manager: 'dockerfile', datasource: 'docker', currentValue: '1.26-alpine' }, 'go toolchain'],
+  ['a GitHub Action joins github actions', { depName: 'actions/checkout', packageName: 'actions/checkout', manager: 'github-actions', datasource: 'github-tags', currentValue: 'v6' }, 'github actions'],
+];
+for (const [contract, dep, want] of grouped) {
+  const got = await groupOf(resolved, dep);
+  contracts.push([`${contract} (got ${got ?? 'none'})`, got === want]);
+}
+
 for (const [contract, holds] of contracts) {
   if (holds) {
     console.log(`ok   ${contract}`);
