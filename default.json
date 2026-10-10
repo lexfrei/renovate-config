@@ -68,6 +68,14 @@
         "golang",
         "**/golang"
       ]
+    },
+    {
+      "description": "Bump GitHub Actions in one PR rather than one per action. Renovate automerges at most one branch per repository per run, so a repo onboarding with a dozen action updates drained one per run over a day; grouped, they land together. Majors still split into their own group PR by default. Same name as the per-repo rules some repos already carry, so those agree with this one instead of competing.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github actions",
+      "groupSlug": "github-actions"
     }
   ],
   "customManagers": [
