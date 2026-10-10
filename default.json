@@ -45,6 +45,14 @@
       "rangeStrategy": "bump"
     },
     {
+      "description": "Bump Go modules in one PR. Renovate automerges at most one branch per repository per run, so each module otherwise waits for a run of its own. Majors still split into their own group PR, and security fixes leave the group because vulnerabilityAlerts carries groupName: null. Must stay ABOVE the kubernetes and go toolchain groups: the last matching rule wins, so they re-claim k8s.io/* and the go directive from this broader one.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "groupName": "go modules",
+      "groupSlug": "go-modules"
+    },
+    {
       "description": "Keep controller-runtime in lockstep with the Kubernetes libraries (a split bump breaks compilation: controller-runtime vX needs a matching client-go)",
       "groupName": "kubernetes",
       "matchManagers": [
