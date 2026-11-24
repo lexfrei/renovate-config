@@ -84,6 +84,16 @@
       ],
       "groupName": "github actions",
       "groupSlug": "github-actions"
+    },
+    {
+      "description": "Take golangci-lint back out of the github actions group. The github-actions manager reads the `version:` input of golangci-lint-action as golangci/golangci-lint itself, so a linter release rode inside the group, and when it brought new findings the whole group went red until the code was fixed. Ungrouped, it shares a branch with the same bump found through a '# renovate:' comment, so it arrives as one PR rather than two. Must stay BELOW the github actions rule: groupName only clears when the clearing rule matches last.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "golangci/golangci-lint"
+      ],
+      "groupName": null
     }
   ],
   "customManagers": [

@@ -100,14 +100,23 @@ contracts.push(
 // re-claim their packages. That ordering is invisible to the validator and
 // silently regroups every repository when it slips, so each kind of dependency
 // is driven through renovate's own rule engine and its group read back.
-async function groupOf(base, dep) {
+async function ruled(base, dep) {
   let depConfig = mergeChildConfig(base, dep);
   depConfig = mergeChildConfig(depConfig, await getDefaultConfig(depConfig.datasource));
   depConfig.versioning ??= getDefaultVersioning(depConfig.datasource);
   const looked = await applyPackageRules(depConfig, 'pre-lookup');
-  const merged = await applyPackageRules({ ...looked, updateType: 'minor' }, 'update-type-merge');
-  return merged.groupName;
+  return applyPackageRules({ ...looked, updateType: 'minor', isMinor: true }, 'update-type-merge');
 }
+const groupOf = async (base, dep) => (await ruled(base, dep)).groupName;
+
+// golangci-lint-action's `version:` input is read twice: the github-actions
+// manager knows the action and reports it as golangci/golangci-lint itself,
+// and the '# renovate:' regex manager reads the same line when it is
+// annotated. Inside the actions group a linter release with new findings
+// turns every action update red with it, and as two branches it is two PRs.
+const lint = { depName: 'golangci/golangci-lint', packageName: 'golangci/golangci-lint', datasource: 'github-releases', currentValue: 'v2.14.0' };
+const lintFromActions = { ...lint, manager: 'github-actions', depType: 'uses-with' };
+const lintFromComment = { ...lint, manager: 'regex' };
 
 const grouped = [
   ['a plain Go module joins go modules', { depName: 'example.com/lib', packageName: 'example.com/lib', manager: 'gomod', depType: 'require', datasource: 'go', currentValue: 'v1.0.0' }, 'go modules'],
@@ -116,11 +125,20 @@ const grouped = [
   ['the go directive stays in go toolchain, not go modules', { depName: 'go', packageName: 'go', manager: 'gomod', depType: 'golang', datasource: 'golang-version', currentValue: '1.26.0' }, 'go toolchain'],
   ['the golang base image joins go toolchain', { depName: 'docker.io/library/golang', packageName: 'docker.io/library/golang', manager: 'dockerfile', datasource: 'docker', currentValue: '1.26-alpine' }, 'go toolchain'],
   ['a GitHub Action joins github actions', { depName: 'actions/checkout', packageName: 'actions/checkout', manager: 'github-actions', datasource: 'github-tags', currentValue: 'v6' }, 'github actions'],
+  ['golangci-lint read from an action input stays out of github actions', lintFromActions, null],
+  ['golangci-lint read from a renovate comment stays ungrouped', lintFromComment, null],
 ];
 for (const [contract, dep, want] of grouped) {
-  const got = await groupOf(resolved, dep);
+  const got = (await groupOf(resolved, dep)) ?? null;
   contracts.push([`${contract} (got ${got ?? 'none'})`, got === want]);
 }
+
+const { getConfig } = await import('renovate/dist/config/defaults.js');
+const { applyUpdateConfig } = await import('renovate/dist/workers/repository/updates/flatten.js');
+const withDefaults = mergeChildConfig(getConfig(), resolved);
+const branchOf = async (dep) => applyUpdateConfig({ ...(await ruled(withDefaults, dep)), newMajor: 2, newMinor: 15 }).branchName;
+const lintBranches = [await branchOf(lintFromActions), await branchOf(lintFromComment)];
+contracts.push([`both golangci-lint readers share one branch (got ${lintBranches.join(', ')})`, lintBranches[0] === lintBranches[1]]);
 
 for (const [contract, holds] of contracts) {
   if (holds) {
